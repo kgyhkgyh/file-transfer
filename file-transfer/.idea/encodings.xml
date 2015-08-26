@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/src/main/java/src/NettyProcessor.java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java/src/RemotingClient.java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java/src/RemotingCommand.java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java/src/RemotingServer.java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java/src/RemotingService.java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java/src/TestClient.java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java/src/TestServer.java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java/src/netty/NettyRemotingClient.java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java/src/netty/NettyRemotingServer.java" charset="UTF-8" />
+  </component>
+</project>
