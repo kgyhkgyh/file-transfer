@@ -20,6 +20,11 @@ public abstract class NettyRemotingAbstract {
 
     private final HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>> processorTable = new HashMap<>();
 
+    /**
+     * 处理netty接收的消息
+     * @param ctx
+     * @param command
+     */
     public void processCommand(final ChannelHandlerContext ctx, RemotingCommand command) {
         final RemotingCommand cmd = command;
         if (cmd != null) {
@@ -37,7 +42,11 @@ public abstract class NettyRemotingAbstract {
 
     }
 
-
+    /**
+     * 处理请求消息
+     * @param ctx
+     * @param command
+     */
     public void processRequest(final ChannelHandlerContext ctx, RemotingCommand command) {
         final Pair<NettyRequestProcessor, ExecutorService> pair = processorTable.get(command.getCmdCode());
 
@@ -70,7 +79,7 @@ public abstract class NettyRemotingAbstract {
     }
 
     /**
-     * 处理回应
+     * 处理应答消息
      * @param ctx
      * @param command
      */
@@ -78,6 +87,11 @@ public abstract class NettyRemotingAbstract {
         requestTable.remove(command.getOpaque());
     }
 
+    /**
+     * 异步递送消息，并保证得到应答
+     * @param channel
+     * @param request
+     */
     public void invokeAsync(final Channel channel, final RemotingCommand request) {
         final RequestFuture requestFuture = new RequestFuture(request.getOpaque(), 60 * 1000, true);
         try {
@@ -90,6 +104,58 @@ public abstract class NettyRemotingAbstract {
                     requestTable.remove(request.getOpaque());
                 }
             });
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 同步递送消息
+     * @param channel
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    public RemotingCommand invokeSync(final Channel channel, final RemotingCommand request) throws Exception{
+        final RequestFuture requestFuture = new RequestFuture(request.getOpaque(), 60 * 1000, true);
+        try {
+            channel.writeAndFlush(request).addListener((channelFuture) ->{
+                if(channelFuture.isSuccess()) {
+                    requestFuture.putRequest(request);
+                    requestFuture.setSendRequestOK(true);
+                    return;
+                }else {
+                    requestFuture.setSendRequestOK(false);
+                    return;
+                }
+            });
+
+            RemotingCommand response = null;
+            if(requestFuture.isSendRequestOK()) {
+                try {
+                    response = requestFuture.waitResponse(10 * 1000);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }else {
+                //TODO 生成错误消息应答
+                response = new RemotingCommand(1, 1, true);
+            }
+
+            return response;
+        } finally {
+
+        }
+    }
+
+    /**
+     * 单向递送消息
+     * @param channel
+     * @param request
+     */
+    public void invokeOneway(final Channel channel, final RemotingCommand request) {
+        try {
+            channel.writeAndFlush(request);
         }catch (Exception e) {
 
         }
