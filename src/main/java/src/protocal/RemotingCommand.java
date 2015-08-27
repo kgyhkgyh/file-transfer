@@ -12,7 +12,7 @@ public class RemotingCommand implements Serializable{
     //请求序列，用于生成请求序列
     private static AtomicInteger RequestId = new AtomicInteger(0);
     //请求序列号
-    private final int opaque = RequestId.getAndIncrement();
+    private int opaque = RequestId.getAndIncrement();
 
     private final int cmdCode;
     //请求类型 1.request 2.response
@@ -53,5 +53,9 @@ public class RemotingCommand implements Serializable{
 
     public int getOpaque() {
         return opaque;
+    }
+
+    public void setOpaque(int opaque) {
+        this.opaque = opaque;
     }
 }

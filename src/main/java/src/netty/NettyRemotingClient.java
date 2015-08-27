@@ -14,6 +14,8 @@ import src.processor.DefaultProcessor;
 import src.util.Pair;
 
 import java.net.InetSocketAddress;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +30,9 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     private final EventLoopGroup eventWorkerLoopGroup;
 
     private ConcurrentHashMap<String, ChannelFuture> channelMap = new ConcurrentHashMap<>();
+
+    // 定时器
+    private final Timer timer = new Timer("ClientHouseKeepingService", true);
 
     public NettyRemotingClient() {
         this.bootstrap = new Bootstrap();
@@ -52,6 +57,13 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                 });
         ExecutorService es = Executors.newCachedThreadPool();
         this.registProcessor(1, new DefaultProcessor(), es);
+
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                scanForReSend();
+            }
+        }, 5 * 1000, 1000);
     }
 
     /**

@@ -1,10 +1,10 @@
 package src.netty;
 
+import io.netty.channel.Channel;
 import src.protocal.RemotingCommand;
 import src.util.SemaphoreReleaseOnlyOnce;
 
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -30,19 +30,22 @@ public class RequestFuture {
 
     private final SemaphoreReleaseOnlyOnce once;
 
-    public RequestFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once) {
+    private Channel channel;
+
+    public RequestFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once, Channel channel) {
         this.opaque = opaque;
         this.timeoutMills = timeoutMills;
         this.reSendRequest = reSendRequest;
         this.once = once;
+        this.channel = channel;
     }
 
     public static RequestFuture createSyncFuture(int opaque, long timeoutMills) {
-        return new RequestFuture(opaque, timeoutMills, false, null);
+        return new RequestFuture(opaque, timeoutMills, false, null, null);
     }
 
-    public static RequestFuture createAsynFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once) {
-        return new RequestFuture(opaque, timeoutMills, reSendRequest, once);
+    public static RequestFuture createAsynFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once, Channel channel) {
+        return new RequestFuture(opaque, timeoutMills, reSendRequest, once, channel);
     }
 
     public void putRequest(RemotingCommand command) {
@@ -83,4 +86,15 @@ public class RequestFuture {
         return requestCommand;
     }
 
+    public boolean isReSendRequest() {
+        return reSendRequest;
+    }
+
+    public Channel getChannel() {
+        return channel;
+    }
+
+    public long getTimeoutMills() {
+        return timeoutMills;
+    }
 }

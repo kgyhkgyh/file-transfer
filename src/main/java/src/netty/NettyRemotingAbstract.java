@@ -6,7 +6,7 @@ import src.protocal.RemotingCommand;
 import src.util.Pair;
 import src.util.SemaphoreReleaseOnlyOnce;
 
-import java.util.HashMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
  */
 public abstract class NettyRemotingAbstract {
 
-    private final ConcurrentHashMap<Integer, RequestFuture> requestTable = new ConcurrentHashMap<>(16);
+    private final ConcurrentHashMap<Integer, RequestFuture> requestTable = new ConcurrentHashMap<>(256);
 
     private Semaphore semaphoreAsync = new Semaphore(2048);
 
@@ -26,6 +26,7 @@ public abstract class NettyRemotingAbstract {
     protected final HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>> processorTable = new HashMap<>();
 
     public abstract void registProcessor(int requestCode, NettyRequestProcessor processor, ExecutorService executorService);
+
 
     /**
      * 处理netty消息
@@ -55,6 +56,11 @@ public abstract class NettyRemotingAbstract {
      * @param command
      */
     public void processRequest(final ChannelHandlerContext ctx, RemotingCommand command) {
+
+        if(command.getOpaque() < 2) {
+            System.out.println("消息拒收");
+            return;
+        }
         final Pair<NettyRequestProcessor, ExecutorService> pair = processorTable.get(command.getCmdCode());
 
         if(pair != null) {
@@ -66,6 +72,7 @@ public abstract class NettyRemotingAbstract {
 
                     if(!command.isRpcOneway()) {
                         if(response != null) {
+                            response.setOpaque(command.getOpaque());
                             ctx.writeAndFlush(response);
                         }
                     }
@@ -93,7 +100,7 @@ public abstract class NettyRemotingAbstract {
     public void processResponse(final ChannelHandlerContext ctx, RemotingCommand command) {
         RequestFuture requestFuture = requestTable.get(command.getOpaque());
         requestFuture.putResponse(command);
-        requestTable.remove(requestFuture);
+        requestTable.remove(command.getOpaque());
         System.out.println(command.getContent());
     }
 
@@ -106,7 +113,7 @@ public abstract class NettyRemotingAbstract {
         boolean acquire = semaphoreAsync.tryAcquire(timeoutMills, TimeUnit.MILLISECONDS);
         if(acquire) {
             SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreAsync);
-            final RequestFuture requestFuture = RequestFuture.createAsynFuture(request.getOpaque(), timeoutMills, true, once);
+            final RequestFuture requestFuture = RequestFuture.createAsynFuture(request.getOpaque(), timeoutMills, true, once, channel);
             try {
                 requestTable.put(request.getOpaque(), requestFuture);
                 channel.writeAndFlush(request).addListener((channelFuture) ->{
@@ -137,6 +144,7 @@ public abstract class NettyRemotingAbstract {
      */
     public RemotingCommand invokeSync(final Channel channel, final RemotingCommand request, long timeoutMills) throws Exception{
         final RequestFuture requestFuture = RequestFuture.createSyncFuture(request.getOpaque(), timeoutMills);
+        System.out.println("发送消息:"+request.getOpaque() + "消息内容:" + request.getContent());
         try {
             channel.writeAndFlush(request).addListener((channelFuture) ->{
                 if(channelFuture.isSuccess()) {
@@ -179,6 +187,30 @@ public abstract class NettyRemotingAbstract {
             try {
                 channel.writeAndFlush(request);
             }catch (Exception e) {
+
+            }
+        }
+    }
+
+    /**
+     * 异步消息超时重发
+     */
+    public void scanForReSend() {
+        Collection<RequestFuture> values = requestTable.values();
+
+        for(Iterator<RequestFuture> iter = values.iterator() ; iter.hasNext(); ) {
+            RequestFuture requestFuture = iter.next();
+            if(requestFuture.isTimeout()) {
+
+                RemotingCommand requestCommand = requestFuture.getRequestCommand();
+                iter.remove();
+                if(requestFuture.isReSendRequest()) {
+                    try {
+                        invokeAsync(requestFuture.getChannel(), requestCommand, requestFuture.getTimeoutMills());
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
 
             }
         }
