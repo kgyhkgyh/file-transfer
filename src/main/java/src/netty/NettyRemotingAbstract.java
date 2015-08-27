@@ -1,15 +1,16 @@
 package src.netty;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
-import src.RemotingCommand;
+import src.protocal.RemotingCommand;
 import src.util.Pair;
+import src.util.SemaphoreReleaseOnlyOnce;
 
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Administrator on 2015/8/26.
@@ -18,10 +19,16 @@ public abstract class NettyRemotingAbstract {
 
     private final ConcurrentHashMap<Integer, RequestFuture> requestTable = new ConcurrentHashMap<>(16);
 
-    private final HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>> processorTable = new HashMap<>();
+    private Semaphore semaphoreAsync = new Semaphore(2048);
+
+    private Semaphore semaphoreOneway = new Semaphore(2048);
+
+    protected final HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>> processorTable = new HashMap<>();
+
+    public abstract void registProcessor(int requestCode, NettyRequestProcessor processor, ExecutorService executorService);
 
     /**
-     * ´¦Àínetty½ÓÊÕµÄÏûÏ¢
+     * å¤„ç†nettyæ¶ˆæ¯
      * @param ctx
      * @param command
      */
@@ -43,7 +50,7 @@ public abstract class NettyRemotingAbstract {
     }
 
     /**
-     * ´¦ÀíÇëÇóÏûÏ¢
+     * å¤„ç†è¯·æ±‚æ¶ˆæ¯
      * @param ctx
      * @param command
      */
@@ -51,10 +58,10 @@ public abstract class NettyRemotingAbstract {
         final Pair<NettyRequestProcessor, ExecutorService> pair = processorTable.get(command.getCmdCode());
 
         if(pair != null) {
-            //´´½¨ÈÎÎñ
+            //åˆ›å»ºä»»åŠ¡
             Runnable runnable = () -> {
                 try {
-                    //ÄÃµ½´¦ÀíÆ÷½øĞĞ´¦Àí
+                    //æ‹¿åˆ°å¤„ç†å™¨è¿›è¡Œå¤„ç†
                     RemotingCommand response = pair.getObject1().processRequest(ctx, command);
 
                     if(!command.isRpcOneway()) {
@@ -68,59 +75,72 @@ public abstract class NettyRemotingAbstract {
             };
 
             try {
-                //½«ÈÎÎñ·ÅÈëÏß³Ì³Ø
+                //å°†ä»»åŠ¡æ”¾å…¥çº¿ç¨‹æ± 
                 pair.getObject2().submit(runnable);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }else {
-            //TODOÎŞ·¨´¦ÀíµÄÇëÇó
+            //TODOæ— æ³•å¤„ç†çš„è¯·æ±‚
         }
     }
 
     /**
-     * ´¦ÀíÓ¦´ğÏûÏ¢
+     * å¤„ç†åº”ç­”æ¶ˆæ¯
      * @param ctx
      * @param command
      */
     public void processResponse(final ChannelHandlerContext ctx, RemotingCommand command) {
-        requestTable.remove(command.getOpaque());
+        RequestFuture requestFuture = requestTable.get(command.getOpaque());
+        requestFuture.putResponse(command);
+        requestTable.remove(requestFuture);
+        System.out.println(command.getContent());
     }
 
     /**
-     * Òì²½µİËÍÏûÏ¢£¬²¢±£Ö¤µÃµ½Ó¦´ğ
+     * å¼‚æ­¥é€’é€æ¶ˆæ¯ï¼Œå¹¶ä¿è¯å¾—åˆ°åº”ç­”
      * @param channel
      * @param request
      */
-    public void invokeAsync(final Channel channel, final RemotingCommand request) {
-        final RequestFuture requestFuture = new RequestFuture(request.getOpaque(), 60 * 1000, true);
-        try {
-            requestTable.put(request.getOpaque(), requestFuture);
-            channel.writeAndFlush(request).addListener((channelFuture) ->{
-                if(channelFuture.isSuccess()) {
-                    requestFuture.putRequest(request);
-                    return;
-                }else {
-                    requestTable.remove(request.getOpaque());
-                }
-            });
-        }catch (Exception e) {
-            e.printStackTrace();
+    public void invokeAsync(final Channel channel, final RemotingCommand request, long timeoutMills) throws InterruptedException {
+        boolean acquire = semaphoreAsync.tryAcquire(timeoutMills, TimeUnit.MILLISECONDS);
+        if(acquire) {
+            SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreAsync);
+            final RequestFuture requestFuture = RequestFuture.createAsynFuture(request.getOpaque(), timeoutMills, true, once);
+            try {
+                requestTable.put(request.getOpaque(), requestFuture);
+                channel.writeAndFlush(request).addListener((channelFuture) ->{
+                    if(channelFuture.isSuccess()) {
+                        requestFuture.putRequest(request);
+                        return;
+                    }else {
+                        requestFuture.release();
+                        requestTable.remove(request.getOpaque());
+                    }
+                });
+            }catch (Exception e) {
+                requestFuture.release();
+                requestTable.remove(request.getOpaque());
+                e.printStackTrace();
+            }
+        }else {
+            //TODO è¶…æ—¶å¤„ç†
         }
     }
 
     /**
-     * Í¬²½µİËÍÏûÏ¢
+     * åŒæ­¥é€’é€æ¶ˆæ¯
      * @param channel
      * @param request
      * @return
      * @throws Exception
      */
-    public RemotingCommand invokeSync(final Channel channel, final RemotingCommand request) throws Exception{
-        final RequestFuture requestFuture = new RequestFuture(request.getOpaque(), 60 * 1000, true);
+    public RemotingCommand invokeSync(final Channel channel, final RemotingCommand request, long timeoutMills) throws Exception{
+        final RequestFuture requestFuture = RequestFuture.createSyncFuture(request.getOpaque(), timeoutMills);
         try {
             channel.writeAndFlush(request).addListener((channelFuture) ->{
                 if(channelFuture.isSuccess()) {
+                    requestTable.put(request.getOpaque(), requestFuture);
                     requestFuture.putRequest(request);
                     requestFuture.setSendRequestOK(true);
                     return;
@@ -138,7 +158,7 @@ public abstract class NettyRemotingAbstract {
                     e.printStackTrace();
                 }
             }else {
-                //TODO Éú³É´íÎóÏûÏ¢Ó¦´ğ
+                //TODO å°†ä»»åŠ¡æ”¾å…¥çº¿ç¨‹æ± 
                 response = new RemotingCommand(1, 1, true);
             }
 
@@ -149,15 +169,18 @@ public abstract class NettyRemotingAbstract {
     }
 
     /**
-     * µ¥ÏòµİËÍÏûÏ¢
+     * å•å‘é€’é€æ¶ˆæ¯
      * @param channel
      * @param request
      */
-    public void invokeOneway(final Channel channel, final RemotingCommand request) {
-        try {
-            channel.writeAndFlush(request);
-        }catch (Exception e) {
+    public void invokeOneway(final Channel channel, final RemotingCommand request, long timeoutMills) throws InterruptedException {
+        boolean acquire = semaphoreOneway.tryAcquire(timeoutMills, TimeUnit.MILLISECONDS);
+        if(acquire) {
+            try {
+                channel.writeAndFlush(request);
+            }catch (Exception e) {
 
+            }
         }
     }
 

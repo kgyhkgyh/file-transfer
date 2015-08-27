@@ -1,9 +1,10 @@
 package src.netty;
 
-import src.RemotingCommand;
+import src.protocal.RemotingCommand;
 import src.util.SemaphoreReleaseOnlyOnce;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,14 +28,21 @@ public class RequestFuture {
 
     private final boolean reSendRequest;
 
-//    private final SemaphoreReleaseOnlyOnce once;
+    private final SemaphoreReleaseOnlyOnce once;
 
-    public RequestFuture(int opaque, long timeoutMills, boolean reSendRequest) {
+    public RequestFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once) {
         this.opaque = opaque;
         this.timeoutMills = timeoutMills;
         this.reSendRequest = reSendRequest;
-//        this.once = once;
-        this.sendRequestOK = sendRequestOK;
+        this.once = once;
+    }
+
+    public static RequestFuture createSyncFuture(int opaque, long timeoutMills) {
+        return new RequestFuture(opaque, timeoutMills, false, null);
+    }
+
+    public static RequestFuture createAsynFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once) {
+        return new RequestFuture(opaque, timeoutMills, reSendRequest, once);
     }
 
     public void putRequest(RemotingCommand command) {
@@ -44,6 +52,10 @@ public class RequestFuture {
     public void putResponse(RemotingCommand command) {
         this.responseCommand = command;
         this.latch.countDown();
+    }
+
+    public void release() {
+        this.once.release();
     }
 
     public RemotingCommand waitResponse(long timeoutMills) throws Exception{
