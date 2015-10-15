@@ -1,4 +1,4 @@
-package src.netty;
+package src.transport.netty;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
@@ -8,10 +8,11 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.serialization.ClassResolvers;
 import io.netty.handler.codec.serialization.ObjectDecoder;
 import io.netty.handler.codec.serialization.ObjectEncoder;
-import src.RemotingClient;
-import src.protocal.RemotingCommand;
-import src.processor.DefaultProcessor;
-import src.util.Pair;
+import src.transport.CommandCallBack;
+import src.transport.RemotingClient;
+import src.transport.processor.FileTaskProcessor;
+import src.transport.protocal.RemotingCommand;
+import src.transport.util.Pair;
 
 import java.net.InetSocketAddress;
 import java.util.Timer;
@@ -29,6 +30,8 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
 
     private final EventLoopGroup eventWorkerLoopGroup;
 
+    private ExecutorService callBackExecutor;
+
     private ConcurrentHashMap<String, ChannelFuture> channelMap = new ConcurrentHashMap<>();
 
     // 定时器
@@ -37,6 +40,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     public NettyRemotingClient() {
         this.bootstrap = new Bootstrap();
         this.eventWorkerLoopGroup = new NioEventLoopGroup();
+        this.callBackExecutor = Executors.newCachedThreadPool();
     }
 
     public void start() {
@@ -55,8 +59,6 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                     }
 
                 });
-        ExecutorService es = Executors.newCachedThreadPool();
-        this.registProcessor(1, new DefaultProcessor(), es);
 
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -117,11 +119,11 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         return null;
     }
 
-    public void invokeAsync(String addr, RemotingCommand command, long timeoutMills) {
+    public void invokeAsync(String addr, RemotingCommand command, long timeoutMills, CommandCallBack callBack) {
         try {
             Channel channel = createChannel(addr);
             if (channel != null && channel.isActive()) {
-                this.invokeAsync(channel, command, timeoutMills);
+                this.invokeAsync(channel, command, timeoutMills, callBack);
             }else {
                 this.closeChannel(addr, channel);
                 throw new Exception(addr);
@@ -153,6 +155,11 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     public void registProcessor(int requestCode, NettyRequestProcessor processor, ExecutorService executorService) {
         Pair<NettyRequestProcessor, ExecutorService> pair = new Pair<>(processor, executorService);
         this.processorTable.put(requestCode, pair);
+    }
+
+    @Override
+    public ExecutorService getExecutor() {
+        return this.callBackExecutor;
     }
 
     class NettyClientHandler extends SimpleChannelInboundHandler<RemotingCommand>{

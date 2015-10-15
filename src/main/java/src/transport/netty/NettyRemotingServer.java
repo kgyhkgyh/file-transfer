@@ -1,4 +1,4 @@
-package src.netty;
+package src.transport.netty;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -8,12 +8,15 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.serialization.ClassResolvers;
 import io.netty.handler.codec.serialization.ObjectDecoder;
 import io.netty.handler.codec.serialization.ObjectEncoder;
-import src.protocal.RemotingCommand;
-import src.RemotingServer;
-import src.processor.DefaultProcessor;
-import src.util.Pair;
+import src.transport.processor.FileTaskProcessor;
+import src.transport.protocal.CommandBody;
+import src.transport.protocal.FileSegmentRequest;
+import src.transport.protocal.RemotingCommand;
+import src.transport.RemotingServer;
+import src.transport.util.Pair;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -30,8 +33,13 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
     private final EventLoopGroup eventLoopGroupBoss;
 
-    public NettyRemotingServer(int port) {
+    private final String baseDir;
+
+    private ExecutorService callBackExecutor;
+
+    public NettyRemotingServer(int port, String baseDir) {
         this.port = port;
+        this.baseDir = baseDir;
         this.serverBootstrap = new ServerBootstrap();
         this.eventLoopGroupWorker = new NioEventLoopGroup();
         this.eventLoopGroupBoss = new NioEventLoopGroup();
@@ -61,7 +69,10 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         }
 
         ExecutorService es = Executors.newCachedThreadPool();
-        this.registProcessor(1, new DefaultProcessor(), es);
+//        this.registProcessor(1, new DefaultProcessor(), es);
+        FileTaskProcessor processor = new FileTaskProcessor(baseDir);
+        this.registProcessor(1, processor, es);
+        this.registProcessor(2, processor, es);
     }
 
     public void stop(){
@@ -77,6 +88,11 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         this.processorTable.put(requestCode, pair);
     }
 
+    @Override
+    public ExecutorService getExecutor() {
+        return this.callBackExecutor;
+    }
+
     class NettyServerHandler extends SimpleChannelInboundHandler<RemotingCommand>{
 
         @Override
@@ -87,6 +103,11 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 //            response.setType("receive");
 //            response.setContent("receive"+content);
 //            channelHandlerContext.writeAndFlush(response);
+            CommandBody body = remotingCommand.getBody();
+            if(body instanceof FileSegmentRequest) {
+                FileSegmentRequest f = (FileSegmentRequest) body;
+                System.out.println(f.getPosition() +"---" + f.getBlockSize()+"---" + f.getFileName()+ "---"+Arrays.toString(f.getContent()));
+            }
             processCommand(channelHandlerContext, remotingCommand);
         }
 

@@ -1,7 +1,15 @@
 package src;
 
-import src.netty.NettyRemotingClient;
-import src.protocal.RemotingCommand;
+import src.file.FileClient;
+import src.transport.CommandCallBack;
+import src.transport.netty.NettyRemotingClient;
+import src.transport.netty.RequestFuture;
+import src.transport.protocal.FileSegmentRequest;
+import src.transport.protocal.FileTaskRequest;
+import src.transport.protocal.RemotingCommand;
+
+import java.io.File;
+import java.io.RandomAccessFile;
 
 /**
  * Created by Administrator on 2015/8/25.
@@ -9,17 +17,9 @@ import src.protocal.RemotingCommand;
 public class TestClient {
 
     public static void main(String[] args) {
-        NettyRemotingClient client = new NettyRemotingClient();
+        FileClient client = new FileClient();
         client.start();
-
-        System.out.println("开始时间"+System.currentTimeMillis());
-        for (int i = 0; i < 1; i++) {
-            RemotingCommand command = new RemotingCommand(1, 1, false);
-            command.setContent("我要发送消息--" + i);
-            client.invokeAsync("127.0.0.1:8000", command, 10 * 1000);
-//            client.invokeSync("127.0.0.1:8000", command, 1000);
-        }
-        System.out.println("结束时间"+System.currentTimeMillis());
+        client.sendFile("D:\\学习资料\\abc.txt", "127.0.0.1:8000");
     }
 
 }

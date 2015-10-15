@@ -1,6 +1,7 @@
 package src;
 
-import src.netty.NettyRemotingServer;
+import src.file.FileServer;
+import src.transport.netty.NettyRemotingServer;
 
 /**
  * Created by Administrator on 2015/8/25.
@@ -8,7 +9,7 @@ import src.netty.NettyRemotingServer;
 public class TestServer {
 
     public static void main(String[] args) {
-        NettyRemotingServer server = new NettyRemotingServer(8000);
+        FileServer server = new FileServer(8000, "d:/target");
         server.start();
     }
 

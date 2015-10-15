@@ -1,4 +1,4 @@
-package src.util;
+package src.transport.util;
 
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;

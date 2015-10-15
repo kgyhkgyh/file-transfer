@@ -1,8 +1,7 @@
-package src;
+package src.transport.protocal;
 
 import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Created by Administrator on 2015/8/25.
@@ -12,7 +11,9 @@ public class RemotingCommand implements Serializable{
     //请求序列，用于生成请求序列
     private static AtomicInteger RequestId = new AtomicInteger(0);
     //请求序列号
-    private final int opaque = RequestId.getAndIncrement();
+    private int opaque = RequestId.getAndIncrement();
+    //是否成功
+    private boolean flag;
 
     private final int cmdCode;
     //请求类型 1.request 2.response
@@ -22,8 +23,11 @@ public class RemotingCommand implements Serializable{
 
     public static final int REQUEST_COMMAND = 1;
     public static final int RESPONSE_COMMAND = 2;
+
     //请求内容
     private String content;
+
+    private CommandBody body;
 
     public RemotingCommand(int cmdCode, int rpcType, boolean rpcOneway) {
         this.cmdCode = cmdCode;
@@ -53,5 +57,25 @@ public class RemotingCommand implements Serializable{
 
     public int getOpaque() {
         return opaque;
+    }
+
+    public void setOpaque(int opaque) {
+        this.opaque = opaque;
+    }
+
+    public CommandBody getBody() {
+        return body;
+    }
+
+    public void setBody(CommandBody body) {
+        this.body = body;
+    }
+
+    public boolean isFlag() {
+        return flag;
+    }
+
+    public void setFlag(boolean flag) {
+        this.flag = flag;
     }
 }

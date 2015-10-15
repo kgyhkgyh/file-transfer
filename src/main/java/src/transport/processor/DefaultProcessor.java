@@ -1,8 +1,8 @@
-package src.processor;
+package src.transport.processor;
 
 import io.netty.channel.ChannelHandlerContext;
-import src.protocal.RemotingCommand;
-import src.netty.NettyRequestProcessor;
+import src.transport.protocal.RemotingCommand;
+import src.transport.netty.NettyRequestProcessor;
 
 /**
  * Created by a on 2015/8/27.

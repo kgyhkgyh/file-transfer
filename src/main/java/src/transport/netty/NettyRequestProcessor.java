@@ -1,7 +1,7 @@
-package src.netty;
+package src.transport.netty;
 
 import io.netty.channel.ChannelHandlerContext;
-import src.protocal.RemotingCommand;
+import src.transport.protocal.RemotingCommand;
 
 /**
  * Created by Administrator on 2015/8/26.

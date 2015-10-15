@@ -1,8 +1,9 @@
-package src.netty;
+package src.transport.netty;
 
 import io.netty.channel.Channel;
-import src.protocal.RemotingCommand;
-import src.util.SemaphoreReleaseOnlyOnce;
+import src.transport.CommandCallBack;
+import src.transport.protocal.RemotingCommand;
+import src.transport.util.SemaphoreReleaseOnlyOnce;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -18,6 +19,8 @@ public class RequestFuture {
 
     private boolean sendRequestOK = true;
 
+    private CommandCallBack callBack;
+
     private final int opaque;
 
     private final long timeoutMills;
@@ -32,20 +35,25 @@ public class RequestFuture {
 
     private Channel channel;
 
-    public RequestFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once, Channel channel) {
+    public RequestFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once, Channel channel, CommandCallBack callBack) {
         this.opaque = opaque;
         this.timeoutMills = timeoutMills;
         this.reSendRequest = reSendRequest;
         this.once = once;
         this.channel = channel;
+        this.callBack = callBack;
     }
 
     public static RequestFuture createSyncFuture(int opaque, long timeoutMills) {
-        return new RequestFuture(opaque, timeoutMills, false, null, null);
+        return new RequestFuture(opaque, timeoutMills, false, null, null, null);
     }
 
     public static RequestFuture createAsynFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once, Channel channel) {
-        return new RequestFuture(opaque, timeoutMills, reSendRequest, once, channel);
+        return new RequestFuture(opaque, timeoutMills, reSendRequest, once, channel, null);
+    }
+
+    public static RequestFuture createAsynFuture(int opaque, long timeoutMills, boolean reSendRequest, SemaphoreReleaseOnlyOnce once, Channel channel, CommandCallBack callBack) {
+        return new RequestFuture(opaque, timeoutMills, reSendRequest, once, channel, callBack);
     }
 
     public void putRequest(RemotingCommand command) {
@@ -64,6 +72,12 @@ public class RequestFuture {
     public RemotingCommand waitResponse(long timeoutMills) throws Exception{
         this.latch.await(timeoutMills, TimeUnit.MILLISECONDS);
         return this.responseCommand;
+    }
+
+    public void executeCallBack() {
+        if(this.callBack != null) {
+            this.callBack.executeCallBack(this);
+        }
     }
 
     public void setSendRequestOK(boolean sendRequestOK) {
@@ -96,5 +110,13 @@ public class RequestFuture {
 
     public long getTimeoutMills() {
         return timeoutMills;
+    }
+
+    public CommandCallBack getCallBack() {
+        return callBack;
+    }
+
+    public void setCallBack(CommandCallBack callBack) {
+        this.callBack = callBack;
     }
 }
